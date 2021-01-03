@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: source-nat-agent
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: source-nat-agent
+  name: source-nat-agent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  namespace: source-nat-agent
+  name: source-nat-agent
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - pods
+    verbs:
+      - list
+      - get
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  namespace: source-nat-agent
+  name: source-nat-agent
+subjects:
+  - kind: ServiceAccount
+    namespace: source-nat-agent
+    name: source-nat-agent
+roleRef:
+  kind: ClusterRole
+  name: source-nat-agent
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: source-nat-agent
+  name: source-nat-agent
+spec:
+  selector:
+    matchLabels:
+      k8s-app: source-nat-agent
+  template:
+    metadata:
+      labels:
+        k8s-app: source-nat-agent
+    spec:
+      serviceAccountName: source-nat-agent
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: agent
+          image: localhost:5000/source-nat-agent:latest
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
