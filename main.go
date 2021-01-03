@@ -36,9 +36,9 @@ func init() {
 }
 
 func terminate() {
-	shell("iptables -w -t nat -D POSTROUTING -j SOURCE-NAT-AGENT 2>/dev/null ||:")
-	shell("iptables -w -t nat -F SOURCE-NAT-AGENT 2>/dev/null ||:")
-	shell("iptables -w -t nat -X SOURCE-NAT-AGENT 2>/dev/null ||:")
+	shell("iptables -w -t nat -D POSTROUTING -j SOURCE-NAT-AGENT 2>/dev/null")
+	shell("iptables -w -t nat -F SOURCE-NAT-AGENT 2>/dev/null")
+	shell("iptables -w -t nat -X SOURCE-NAT-AGENT 2>/dev/null")
 }
 
 func cleanRule(id string) {
