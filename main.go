@@ -28,11 +28,6 @@ func init() {
 	shell("iptables -w -t nat -I POSTROUTING -j SOURCE-NAT-AGENT")
 	shell("iptables -w -t nat -A SOURCE-NAT-AGENT \\! -s 10.42.0.0/16 -j RETURN")
 	shell("iptables -w -t nat -A SOURCE-NAT-AGENT -d 10.42.0.0/16 -j RETURN")
-
-	// probably also not smart to remove all rules when we're shutting down
-	// I'm assuming this is here for debugging purposes
-	// should likely be removed for proper production usage
-	defer terminate()
 }
 
 func terminate() {
@@ -46,6 +41,11 @@ func cleanRule(id string) {
 }
 
 func main() {
+	// probably also not smart to remove all rules when we're shutting down
+	// I'm assuming this is here for debugging purposes
+	// should likely be removed for proper production usage
+	defer terminate()
+
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
