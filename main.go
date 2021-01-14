@@ -86,8 +86,10 @@ func main() {
 				// a ns or changed to a different value, then we would need to process all current pods and re-setup
 				// their rules
 
-				fmt.Printf(" [NS] [DEL] %s %s\n", ns.Name, ip)
-				delete(nsIps, ns.Name)
+				if ip, ok := nsIps[ns.Name]; ok {
+					fmt.Printf(" [NS] [DEL] %s\n", ns.Name, ip)
+					delete(nsIps, ns.Name)
+				}
 			}
 		case e := <-pods:
 			pod := e.item.(*v1.Pod)
