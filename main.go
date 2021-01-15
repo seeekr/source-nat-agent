@@ -79,6 +79,19 @@ func main() {
 						// this command has been moved here from the "on pod created/running" code,
 						// assuming that this is per-node/per-namespace setup code that needs to run only once per source ip
 						shell("ip addr add %s/32 dev $(ip route get 1 | head -n1 | cut -d' ' -f5)", ip)
+
+						// if we're not doing the initial namespace loading we will also trigger an event
+						// for all affected pods
+						if !e.noCascade {
+							if podList, err := clientset.CoreV1().Pods(ns.Name).List(context.TODO(), metaV1.ListOptions{}); err != nil {
+								msg := "listing pods failed when cascading ip changes for namespace '%s': %s"
+								_, _ = fmt.Fprintf(os.Stderr, msg, ip, err)
+							} else {
+								for p := range podList.Items {
+									pods <- event{true, p, false}
+								}
+							}
+						}
 					}
 				} else {
 					// annotation not there or deleted --> ensure we don't keep the entry around
@@ -126,7 +139,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "initial listing of namespaces failed: %s\n", err)
 	} else {
 		for ns := range nsList.Items {
-			namespaces <- event{true, ns}
+			namespaces <- event{true, ns, true}
 		}
 	}
 
@@ -149,8 +162,9 @@ func main() {
 // -- helper types & functions --
 
 type event struct {
-	added bool
-	item  interface{}
+	added     bool
+	item      interface{}
+	noCascade bool
 }
 
 func watch(clientset *kubernetes.Clientset, resource string, objType runtime.Object, ch chan event, resyncSeconds time.Duration) {
@@ -163,13 +177,13 @@ func watch(clientset *kubernetes.Clientset, resource string, objType runtime.Obj
 func makeHandler(ch chan event) cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(it interface{}) {
-			ch <- event{true, it}
+			ch <- event{true, it, false}
 		},
 		UpdateFunc: func(_, it interface{}) {
-			ch <- event{true, it}
+			ch <- event{true, it, false}
 		},
 		DeleteFunc: func(it interface{}) {
-			ch <- event{false, it}
+			ch <- event{false, it, false}
 		},
 	}
 }
