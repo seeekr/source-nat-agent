@@ -72,12 +72,14 @@ func main() {
 			case e := <-namespaces:
 				ns := e.item.(*v1.Namespace)
 				if ip, ok := ns.Annotations["source-nat-agent/ip"]; ok && e.added {
-					fmt.Printf(" [NS] [ADD/UPD] %s %s\n", ns.Name, ip)
-					nsIps[ns.Name] = ip
+					if nsIps[ns.Name] != ip {
+						fmt.Printf(" [NS] [ADD/UPD] %s %s\n", ns.Name, ip)
+						nsIps[ns.Name] = ip
 
-					// this command has been moved here from the "on pod created/running" code,
-					// assuming that this is per-node/per-namespace setup code that needs to run only once per source ip
-					shell("ip addr add %s/32 dev $(ip route get 1 | head -n1 | cut -d' ' -f5)", ip)
+						// this command has been moved here from the "on pod created/running" code,
+						// assuming that this is per-node/per-namespace setup code that needs to run only once per source ip
+						shell("ip addr add %s/32 dev $(ip route get 1 | head -n1 | cut -d' ' -f5)", ip)
+					}
 				} else {
 					// annotation not there or deleted --> ensure we don't keep the entry around
 
