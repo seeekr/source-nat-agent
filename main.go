@@ -86,8 +86,8 @@ func main() {
 				// a ns or changed to a different value, then we would need to process all current pods and re-setup
 				// their rules
 
-				if ip, ok := nsIps[ns.Name]; ok {
-					fmt.Printf(" [NS] [DEL] %s\n", ns.Name, ip)
+				if _, ok := nsIps[ns.Name]; ok {
+					fmt.Printf(" [NS] [DEL] %s\n", ns.Name)
 					delete(nsIps, ns.Name)
 				}
 			}
