@@ -149,8 +149,13 @@ func main() {
 	fmt.Println("Starting watcher")
 
 	// now we can start watching
-	go watch(clientset, "namespaces", &v1.Namespace{}, namespaces, 15)
-	go watch(clientset, "pods", &v1.Pod{}, pods, 31)
+	go watch(clientset, "namespaces", &v1.Namespace{}, namespaces, 15, func(old interface{}, new interface{}) bool {
+		return true
+	})
+	go watch(clientset, "pods", &v1.Pod{}, pods, 31, func(old interface{}, new interface{}) bool {
+		// we only care about updates if the ip has changed
+		return old.(*v1.Pod).Status.PodIP != new.(*v1.Pod).Status.PodIP
+	})
 
 	// all work being done on separate goroutines, so we block main goroutine forever, or until interrupted
 	ch := make(chan os.Signal)
@@ -170,20 +175,22 @@ type event struct {
 	noCascade bool
 }
 
-func watch(clientset *kubernetes.Clientset, resource string, objType runtime.Object, ch chan event, resyncSeconds time.Duration) {
+func watch(clientset *kubernetes.Clientset, resource string, objType runtime.Object, ch chan event, resyncSeconds time.Duration, updateFilter func(old interface{}, new interface{}) bool) {
 	watchlist := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), resource, v1.NamespaceAll, fields.Everything())
-	_, controller := cache.NewInformer(watchlist, objType, resyncSeconds*time.Second, makeHandler(ch))
+	_, controller := cache.NewInformer(watchlist, objType, resyncSeconds*time.Second, makeHandler(ch, updateFilter))
 
 	go controller.Run(nil)
 }
 
-func makeHandler(ch chan event) cache.ResourceEventHandlerFuncs {
+func makeHandler(ch chan event, updateFilter func(old interface{}, new interface{}) bool) cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(it interface{}) {
 			ch <- event{true, it, false}
 		},
-		UpdateFunc: func(_, it interface{}) {
-			ch <- event{true, it, false}
+		UpdateFunc: func(old interface{}, new interface{}) {
+			if updateFilter(old, new) {
+				ch <- event{true, new, false}
+			}
 		},
 		DeleteFunc: func(it interface{}) {
 			ch <- event{false, it, false}
