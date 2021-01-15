@@ -72,24 +72,25 @@ func main() {
 			case e := <-namespaces:
 				ns := e.item.(*v1.Namespace)
 				if ip, ok := ns.Annotations["source-nat-agent/ip"]; ok && e.added {
-					if nsIps[ns.Name] != ip {
-						fmt.Printf(" [NS] [ADD/UPD] %s %s\n", ns.Name, ip)
-						nsIps[ns.Name] = ip
+					if nsIps[ns.Name] == ip {
+						continue
+					}
+					fmt.Printf(" [NS] [ADD/UPD] %s %s\n", ns.Name, ip)
+					nsIps[ns.Name] = ip
 
-						// this command has been moved here from the "on pod created/running" code,
-						// assuming that this is per-node/per-namespace setup code that needs to run only once per source ip
-						shell("ip addr add %s/32 dev $(ip route get 1 | head -n1 | cut -d' ' -f5)", ip)
+					// this command has been moved here from the "on pod created/running" code,
+					// assuming that this is per-node/per-namespace setup code that needs to run only once per source ip
+					shell("ip addr add %s/32 dev $(ip route get 1 | head -n1 | cut -d' ' -f5)", ip)
 
-						// if we're not doing the initial namespace loading we will also trigger an event
-						// for all affected pods
-						if !e.noCascade {
-							if podList, err := clientset.CoreV1().Pods(ns.Name).List(context.TODO(), metaV1.ListOptions{}); err != nil {
-								msg := "listing pods failed when cascading ip changes for namespace '%s': %s"
-								_, _ = fmt.Fprintf(os.Stderr, msg, ip, err)
-							} else {
-								for p := range podList.Items {
-									pods <- event{true, p, false}
-								}
+					// if we're not doing the initial namespace loading we will also trigger an event
+					// for all affected pods
+					if !e.noCascade {
+						if podList, err := clientset.CoreV1().Pods(ns.Name).List(context.TODO(), metaV1.ListOptions{}); err != nil {
+							msg := "listing pods failed when cascading ip changes for namespace '%s': %s"
+							_, _ = fmt.Fprintf(os.Stderr, msg, ip, err)
+						} else {
+							for p := range podList.Items {
+								pods <- event{true, p, false}
 							}
 						}
 					}
@@ -108,27 +109,29 @@ func main() {
 			case e := <-pods:
 				pod := e.item.(*v1.Pod)
 				id := fmt.Sprintf("source-nat-agent:%s:%s", pod.Namespace, pod.Name)
-				if e.added {
-					fmt.Printf("[POD] [ADD/UPD] %s/%s phase=%s pod_ip=%s source_ip=%s\n", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.PodIP, nsIps[pod.Namespace])
-					if sourceIp, ok := nsIps[pod.Namespace]; ok {
-						// again, ideally here we would just keep our own in-memory state of what we know exists as iptables
-						// rules and would not have to re-check the rules each time we think we may need to do something
-						// the upside of that would also be that the full re-read of the pods would then not trigger
-						// any shell commands for all already-known pods, so we could do it more often and cheaper,
-						// which helps with reacting to any watch events we may have missed, which is not an usual thing to
-						// happen, i.e. a k8s watch operation is not guaranteed to send all events all of the time
-						if command(`iptables -w -t nat -S SOURCE-NAT-AGENT | grep -q " --comment \"%s\" -j SNAT --to-source %s\"`, id, sourceIp).Run() != nil {
-							cleanRule(id)
-							if _, err := command("iptables -w -t nat -A SOURCE-NAT-AGENT -s %s -m comment --comment %s -j SNAT --to-source %s", pod.Status.PodIP, id, sourceIp).Output(); err != nil {
-								_, _ = fmt.Fprintf(os.Stderr, "iptables error: %s\n", err)
-							}
-						}
-					}
-					// ignoring case where namespace has no ip annotation set or we haven't seen that namespace yet
-					// assuming that we'll have a namespace ip next time we get an event about this pod
-				} else {
+				if !e.added {
 					fmt.Printf("[POD] [DEL] %s/%s phase=%s pod_ip=%s source_ip=%s\n", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.PodIP, nsIps[pod.Namespace])
 					cleanRule(id)
+					continue
+				}
+				sourceIp, ok := nsIps[pod.Namespace]
+				if !ok {
+					// ignoring case where namespace has no ip annotation set or we haven't seen that namespace yet
+					// assuming that we'll have a namespace ip next time we get an event about this pod
+					continue
+				}
+				fmt.Printf("[POD] [ADD/UPD] %s/%s phase=%s pod_ip=%s source_ip=%s\n", pod.Namespace, pod.Name, pod.Status.Phase, pod.Status.PodIP, nsIps[pod.Namespace])
+				// again, ideally here we would just keep our own in-memory state of what we know exists as iptables
+				// rules and would not have to re-check the rules each time we think we may need to do something
+				// the upside of that would also be that the full re-read of the pods would then not trigger
+				// any shell commands for all already-known pods, so we could do it more often and cheaper,
+				// which helps with reacting to any watch events we may have missed, which is not an usual thing to
+				// happen, i.e. a k8s watch operation is not guaranteed to send all events all of the time
+				if command(`iptables -w -t nat -S SOURCE-NAT-AGENT | grep -q " --comment \"%s\" -j SNAT --to-source %s\"`, id, sourceIp).Run() != nil {
+					cleanRule(id)
+					if _, err := command("iptables -w -t nat -A SOURCE-NAT-AGENT -s %s -m comment --comment %s -j SNAT --to-source %s", pod.Status.PodIP, id, sourceIp).Output(); err != nil {
+						_, _ = fmt.Fprintf(os.Stderr, "iptables error: %s\n", err)
+					}
 				}
 			}
 		}
