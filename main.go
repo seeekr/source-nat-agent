@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+const podsResyncSeconds = 60
+const namespacesResyncSeconds = 60
+
 func init() {
 	// not sure it's wise to remove the iptables rules while traffic is happening
 	// it would be smarter, on init, to:
@@ -149,10 +152,10 @@ func main() {
 	fmt.Println("Starting watcher")
 
 	// now we can start watching
-	go watch(clientset, "namespaces", &v1.Namespace{}, namespaces, 15, func(old interface{}, new interface{}) bool {
+	go watch(clientset, "namespaces", &v1.Namespace{}, namespaces, namespacesResyncSeconds, func(old interface{}, new interface{}) bool {
 		return true
 	})
-	go watch(clientset, "pods", &v1.Pod{}, pods, 31, func(old interface{}, new interface{}) bool {
+	go watch(clientset, "pods", &v1.Pod{}, pods, podsResyncSeconds, func(old interface{}, new interface{}) bool {
 		// we only care about updates if the ip has changed
 		return old.(*v1.Pod).Status.PodIP != new.(*v1.Pod).Status.PodIP
 	})
