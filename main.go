@@ -93,7 +93,7 @@ func main() {
 							_, _ = fmt.Fprintf(os.Stderr, msg, ip, err)
 						} else {
 							for _, p := range podList.Items {
-								pods <- event{true, p, false}
+								pods <- event{true, &p, false}
 							}
 						}
 					}
@@ -145,7 +145,7 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "initial listing of namespaces failed: %s\n", err)
 	} else {
 		for _, ns := range nsList.Items {
-			namespaces <- event{true, ns, true}
+			namespaces <- event{true, &ns, true}
 		}
 	}
 
