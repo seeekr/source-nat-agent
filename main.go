@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"os"
 	"os/exec"
-	"reflect"
 	"time"
 )
 
@@ -74,9 +73,8 @@ func main() {
 		return true
 	})
 	go watch(clientset, "pods", &v1.Pod{}, pods, podsResyncSeconds, func(old interface{}, new interface{}) bool {
-		// we only care about updates if ip or annotations have changed
-		return old.(*v1.Pod).Status.PodIP != new.(*v1.Pod).Status.PodIP ||
-			!reflect.DeepEqual(old.(*v1.Pod).Annotations, new.(*v1.Pod).Annotations)
+		// we only care about updates if pod's ip has changed
+		return old.(*v1.Pod).Status.PodIP != new.(*v1.Pod).Status.PodIP
 	})
 
 	nsIps := make(map[string]string)
