@@ -89,7 +89,7 @@ func main() {
 							msg := "listing pods failed when cascading ip changes for namespace '%s': %s"
 							_, _ = fmt.Fprintf(os.Stderr, msg, ip, err)
 						} else {
-							for p := range podList.Items {
+							for _, p := range podList.Items {
 								pods <- event{true, p, false}
 							}
 						}
@@ -141,7 +141,7 @@ func main() {
 	if nsList, err := clientset.CoreV1().Namespaces().List(context.TODO(), metaV1.ListOptions{}); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "initial listing of namespaces failed: %s\n", err)
 	} else {
-		for ns := range nsList.Items {
+		for _, ns := range nsList.Items {
 			namespaces <- event{true, ns, true}
 		}
 	}
